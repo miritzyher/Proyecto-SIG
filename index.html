@@ -6,37 +6,14 @@
         <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
         <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-capable" content="yes">
-        <link rel="stylesheet" href="./resources/ol.css">
-        <link rel="stylesheet" href="resources/fontawesome-all.min.css">
-        <link rel="stylesheet" type="text/css" href="resources/horsey.min.css">
-        <link rel="stylesheet" type="text/css" href="resources/ol-search-layer.min.css">
-        <link href="resources/photon-geocoder-autocomplete.min.css" rel="stylesheet">
-        <link rel="stylesheet" href="./resources/ol-layerswitcher.css">
-        <link rel="stylesheet" href="./resources/qgis2web.css">
-        <style>
-        html, body {
-            background-color: #ffffff;
-        }
-        .ol-control > * {
-            background-color: #f8f8f8!important;
-            color: #444444!important;
-            border-radius: 0px;
-        }
-        .ol-attribution a, .gcd-gl-input::placeholder, .search-layer-input-search::placeholder {
-            color: #444444!important;
-        }
-        .search-layer-input-search {
-            background-color: #f8f8f8!important;
-        }
-        .ol-control > *:focus, .ol-control >*:hover {
-            background-color: rgba(248, 248, 248, 0.7)!important;
-        } 
-        .ol-control {
-            background-color: rgba(255,255,255,.4) !important;
-            padding: 2px !important;
-        } 
-        </style>
-
+        <link rel="stylesheet" href="css/leaflet.css">
+        <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+        <link rel="stylesheet" href="css/qgis2web.css">
+        <link rel="stylesheet" href="css/fontawesome-all.min.css">
+        <link rel="stylesheet" href="css/MarkerCluster.css">
+        <link rel="stylesheet" href="css/MarkerCluster.Default.css">
+        <link rel="stylesheet" href="css/leaflet.photon.css">
+        <link rel="stylesheet" href="css/leaflet-measure.css">
         <style>
         html, body, #map {
             width: 100%;
@@ -49,22 +26,295 @@
     </head>
     <body>
         <div id="map">
-            <div id="popup" class="ol-popup">
-                <a href="#" id="popup-closer" class="ol-popup-closer"></a>
-                <div id="popup-content"></div>
-            </div>
         </div>
-        <script src="resources/qgis2web_expressions.js"></script>
-        <script src="./resources/functions.js"></script>
-        <script src="./resources/ol.js"></script>
-        <script src="resources/horsey.min.js"></script>
-        <script src="resources/ol-search-layer.js"></script>
-        <script src="./resources/ol-layerswitcher.js"></script>
-        <script src="resources/photon-geocoder-autocomplete.min.js"></script>
-        <script src="layers/Coloniasporniveldeafectacin_1.js"></script><script src="layers/SocavonesReportados_2.js"></script>
-        <script src="styles/Coloniasporniveldeafectacin_1_style.js"></script><script src="styles/SocavonesReportados_2_style.js"></script>
-        <script src="./layers/layers.js" type="text/javascript"></script> 
-        <script src="./resources/Autolinker.min.js"></script>
-        <script src="./resources/qgis2web.js"></script>        
+        <script src="js/qgis2web_expressions.js"></script>
+        <script src="js/leaflet.js"></script>
+        <script src="js/L.Control.Layers.Tree.min.js"></script>
+        <script src="js/leaflet.rotatedMarker.js"></script>
+        <script src="js/leaflet.pattern.js"></script>
+        <script src="js/leaflet-hash.js"></script>
+        <script src="js/Autolinker.min.js"></script>
+        <script src="js/rbush.min.js"></script>
+        <script src="js/labelgun.min.js"></script>
+        <script src="js/labels.js"></script>
+        <script src="js/leaflet.photon.js"></script>
+        <script src="js/leaflet-measure.js"></script>
+        <script src="js/leaflet.markercluster.js"></script>
+        <script src="data/COLONIASPORNIVELDEAFECTACIN_1.js"></script>
+        <script src="data/SOCAVONESREPORTADOS_2.js"></script>
+        <script>
+        var map = L.map('map', {
+            zoomControl:false, maxZoom:28, minZoom:1
+        }).fitBounds([[19.237346818506694,-99.23243778077058],[19.47868403910934,-98.86385002566836]]);
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('<a href="https://github.com/qgis2web/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+        // remove popup's row if "visible-with-data"
+        function removeEmptyRowsFromPopupContent(content, feature) {
+         var tempDiv = document.createElement('div');
+         tempDiv.innerHTML = content;
+         var rows = tempDiv.querySelectorAll('tr');
+         for (var i = 0; i < rows.length; i++) {
+             var td = rows[i].querySelector('td.visible-with-data');
+             var key = td ? td.id : '';
+             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                 rows[i].parentNode.removeChild(rows[i]);
+             }
+         }
+         return tempDiv.innerHTML;
+        }
+        // modify popup if contains media
+        function addClassToPopupIfMedia(content, popup) {
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            var imgTd = tempDiv.querySelector('td img');
+            if (imgTd) {
+                var src = imgTd.getAttribute('src');
+                if (/\.(jpg|jpeg|png|gif|bmp|webp|avif)$/i.test(src)) {
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp3|wav|ogg|aac)$/i.test(src)) {
+                    var audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.src = src;
+                    imgTd.parentNode.replaceChild(audio, imgTd);
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp4|webm|ogg|mov)$/i.test(src)) {
+                    var video = document.createElement('video');
+                    video.controls = true;
+                    video.src = src;
+                    video.style.width = "400px";
+                    video.style.height = "300px";
+                    video.style.maxHeight = "60vh";
+                    video.style.maxWidth = "60vw";
+                    imgTd.parentNode.replaceChild(video, imgTd);
+                    popup._contentNode.classList.add('media');
+                    // Aggiorna il popup quando il video carica i metadati
+                    video.addEventListener('loadedmetadata', function() {
+                        popup.update();
+                    });
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else {
+                    popup._contentNode.classList.remove('media');
+                }
+            } else {
+                popup._contentNode.classList.remove('media');
+            }
+        }
+        var zoomControl = L.control.zoom({
+            position: 'topleft'
+        }).addTo(map);
+        var measureControl = new L.Control.Measure({
+            position: 'topleft',
+            primaryLengthUnit: 'meters',
+            secondaryLengthUnit: 'kilometers',
+            primaryAreaUnit: 'sqmeters',
+            secondaryAreaUnit: 'hectares'
+        });
+        measureControl.addTo(map);
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].innerHTML = '';
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].className += ' fas fa-ruler';
+        var bounds_group = new L.featureGroup([]);
+        function setBounds() {
+        }
+        map.createPane('pane_OpenStreetMap_0');
+        map.getPane('pane_OpenStreetMap_0').style.zIndex = 400;
+        var layer_OpenStreetMap_0 = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            pane: 'pane_OpenStreetMap_0',
+            opacity: 1.0,
+            attribution: '',
+            minZoom: 1,
+            maxZoom: 28,
+            minNativeZoom: 0,
+            maxNativeZoom: 19
+        });
+        layer_OpenStreetMap_0;
+        map.addLayer(layer_OpenStreetMap_0);
+        function pop_COLONIASPORNIVELDEAFECTACIN_1(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">ALCALDÍA</th>\
+                        <td class="visible-with-data" id="ALCALDÍA">' + (feature.properties['ALCALDÍA'] !== null ? autolinker.link(String(feature.properties['ALCALDÍA']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">COLONIA</th>\
+                        <td class="visible-with-data" id="COLONIA">' + (feature.properties['COLONIA'] !== null ? autolinker.link(String(feature.properties['COLONIA']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">CANTIDAD SOCAVONES</th>\
+                        <td class="visible-with-data" id="CANTIDAD SOCAVONES">' + (feature.properties['CANTIDAD SOCAVONES'] !== null ? autolinker.link(String(feature.properties['CANTIDAD SOCAVONES']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_COLONIASPORNIVELDEAFECTACIN_1_0(feature) {
+            if (feature.properties['CANTIDAD SOCAVONES'] >= 0.000000 && feature.properties['CANTIDAD SOCAVONES'] <= 1.000000 ) {
+                return {
+                pane: 'pane_COLONIASPORNIVELDEAFECTACIN_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(82,220,60,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['CANTIDAD SOCAVONES'] >= 1.000000 && feature.properties['CANTIDAD SOCAVONES'] <= 2.000000 ) {
+                return {
+                pane: 'pane_COLONIASPORNIVELDEAFECTACIN_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(247,234,0,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['CANTIDAD SOCAVONES'] >= 2.000000 && feature.properties['CANTIDAD SOCAVONES'] <= 6.000000 ) {
+                return {
+                pane: 'pane_COLONIASPORNIVELDEAFECTACIN_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(215,4,32,1.0)',
+                interactive: true,
+            }
+            }
+        }
+        map.createPane('pane_COLONIASPORNIVELDEAFECTACIN_1');
+        map.getPane('pane_COLONIASPORNIVELDEAFECTACIN_1').style.zIndex = 401;
+        map.getPane('pane_COLONIASPORNIVELDEAFECTACIN_1').style['mix-blend-mode'] = 'normal';
+        var layer_COLONIASPORNIVELDEAFECTACIN_1 = new L.geoJson(json_COLONIASPORNIVELDEAFECTACIN_1, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_COLONIASPORNIVELDEAFECTACIN_1',
+            layerName: 'layer_COLONIASPORNIVELDEAFECTACIN_1',
+            pane: 'pane_COLONIASPORNIVELDEAFECTACIN_1',
+            onEachFeature: pop_COLONIASPORNIVELDEAFECTACIN_1,
+            style: style_COLONIASPORNIVELDEAFECTACIN_1_0,
+        });
+        bounds_group.addLayer(layer_COLONIASPORNIVELDEAFECTACIN_1);
+        map.addLayer(layer_COLONIASPORNIVELDEAFECTACIN_1);
+        function pop_SOCAVONESREPORTADOS_2(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">FECHA</th>\
+                        <td class="visible-with-data" id="FECHA">' + (feature.properties['FECHA'] !== null ? autolinker.link(String(feature.properties['FECHA']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">FUENTE</th>\
+                        <td class="visible-with-data" id="FUENTE">' + (feature.properties['FUENTE'] !== null ? autolinker.link(String(feature.properties['FUENTE']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">TIPO DE FUENTE</th>\
+                        <td class="visible-with-data" id="TIPO DE FUENTE">' + (feature.properties['TIPO DE FUENTE'] !== null ? autolinker.link(String(feature.properties['TIPO DE FUENTE']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">DESCRIPCIÓN </th>\
+                        <td class="visible-with-data" id="DESCRIPCIÓN ">' + (feature.properties['DESCRIPCIÓN '] !== null ? autolinker.link(String(feature.properties['DESCRIPCIÓN ']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">DIRECCIÓN</th>\
+                        <td class="visible-with-data" id="DIRECCIÓN">' + (feature.properties['DIRECCIÓN'] !== null ? autolinker.link(String(feature.properties['DIRECCIÓN']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">COLONIA</th>\
+                        <td class="visible-with-data" id="COLONIA">' + (feature.properties['COLONIA'] !== null ? autolinker.link(String(feature.properties['COLONIA']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">URL</th>\
+                        <td class="visible-with-data" id="URL">' + (feature.properties['URL'] !== null ? autolinker.link(String(feature.properties['URL']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_SOCAVONESREPORTADOS_2_0() {
+            return {
+                pane: 'pane_SOCAVONESREPORTADOS_2',
+                radius: 4.0,
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(190,178,151,1.0)',
+                interactive: true,
+            }
+        }
+        map.createPane('pane_SOCAVONESREPORTADOS_2');
+        map.getPane('pane_SOCAVONESREPORTADOS_2').style.zIndex = 402;
+        map.getPane('pane_SOCAVONESREPORTADOS_2').style['mix-blend-mode'] = 'normal';
+        var layer_SOCAVONESREPORTADOS_2 = new L.geoJson(json_SOCAVONESREPORTADOS_2, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_SOCAVONESREPORTADOS_2',
+            layerName: 'layer_SOCAVONESREPORTADOS_2',
+            pane: 'pane_SOCAVONESREPORTADOS_2',
+            onEachFeature: pop_SOCAVONESREPORTADOS_2,
+            pointToLayer: function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.circleMarker(latlng, style_SOCAVONESREPORTADOS_2_0(feature));
+            },
+        });
+        var cluster_SOCAVONESREPORTADOS_2 = new L.MarkerClusterGroup({showCoverageOnHover: false,
+            spiderfyDistanceMultiplier: 2});
+        cluster_SOCAVONESREPORTADOS_2.addLayer(layer_SOCAVONESREPORTADOS_2);
+
+        bounds_group.addLayer(layer_SOCAVONESREPORTADOS_2);
+        cluster_SOCAVONESREPORTADOS_2.addTo(map);
+        var overlaysTree = [
+            {label: '<img src="legend/SOCAVONESREPORTADOS_2.png" /> SOCAVONES REPORTADOS', layer: cluster_SOCAVONESREPORTADOS_2},
+            {label: 'COLONIAS POR NIVEL DE AFECTACIÓN<br /><table><tr><td style="text-align: center;"><img src="legend/COLONIASPORNIVELDEAFECTACIN_1_Pocaafectación0.png" /></td><td>Poca afectación </td></tr><tr><td style="text-align: center;"><img src="legend/COLONIASPORNIVELDEAFECTACIN_1_Afectaciónmedia1.png" /></td><td>Afectación media</td></tr><tr><td style="text-align: center;"><img src="legend/COLONIASPORNIVELDEAFECTACIN_1_Muchaafectación2.png" /></td><td>Mucha afectación</td></tr></table>', layer: layer_COLONIASPORNIVELDEAFECTACIN_1},
+            {label: "OpenStreetMap", layer: layer_OpenStreetMap_0, radioGroup: 'bm' },]
+        var lay = L.control.layers.tree(null, overlaysTree,{
+            //namedToggle: true,
+            //selectorBack: false,
+            //closedSymbol: '&#8862; &#x1f5c0;',
+            //openedSymbol: '&#8863; &#x1f5c1;',
+            //collapseAll: 'Collapse all',
+            //expandAll: 'Expand all',
+            collapsed: true,
+        });
+        lay.addTo(map);
+        setBounds();
+        </script>        
     </body>
 </html>
